@@ -21,6 +21,11 @@ import { COUNTRY_CODES } from './countryCodes.js';
 
 const TOKEN_KEY = 'medassist_api_token_v1';
 const ESCALATION_MINUTES = 15;
+
+function getAuthStorage() {
+  if (typeof window === 'undefined') return null;
+  return window.sessionStorage;
+}
 const HASSAN_TIMEZONE = 'Asia/Kolkata';
 
 const HEALTH_NEWS_FALLBACK = [
@@ -1789,7 +1794,7 @@ function PatientWorkspace({
 }
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
+  const [token, setToken] = useState(() => getAuthStorage()?.getItem(TOKEN_KEY) || '');
   const [session, setSession] = useState(null);
   const [medications, setMedications] = useState([]);
   const [logs, setLogs] = useState([]);
@@ -1826,10 +1831,13 @@ export default function App() {
   const escalationLockRef = useRef(new Set());
 
   useEffect(() => {
+    const storage = getAuthStorage();
+    if (!storage) return;
+
     if (token) {
-      localStorage.setItem(TOKEN_KEY, token);
+      storage.setItem(TOKEN_KEY, token);
     } else {
-      localStorage.removeItem(TOKEN_KEY);
+      storage.removeItem(TOKEN_KEY);
     }
   }, [token]);
 
@@ -1898,9 +1906,35 @@ export default function App() {
       refreshSecureData(token).catch(() => {
         // Keep UI stable during temporary backend/network issues.
       });
-    }, 30000);
+    }, 10000);
 
     return () => window.clearInterval(poll);
+  }, [token, session, refreshSecureData]);
+
+  useEffect(() => {
+    if (!token || !session) return undefined;
+    if (typeof window === 'undefined' || typeof document === 'undefined') return undefined;
+
+    const syncIfVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      refreshSecureData(token).catch(() => {
+        // Keep UI stable during temporary backend/network issues.
+      });
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncIfVisible();
+      }
+    };
+
+    window.addEventListener('focus', syncIfVisible);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', syncIfVisible);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [token, session, refreshSecureData]);
 
   const loadNews = useCallback(async () => {

@@ -16,6 +16,8 @@ services:
         value: "604800000"
       - key: API_TIMEOUT_MS
         value: "12000"
+      - key: SWEEP_INTERVAL_MS
+        value: "30000"
       - key: DB_PATH
         value: /data/medassist.sqlite
     disks:

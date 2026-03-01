@@ -13,6 +13,7 @@ const APP_TIMEZONE = process.env.APP_TIMEZONE || 'Asia/Kolkata';
 const ESCALATION_MINUTES = Number(process.env.ESCALATION_MINUTES || 15);
 const API_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS || 12000);
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 24 * 7);
+const SWEEP_INTERVAL_MS = Number(process.env.SWEEP_INTERVAL_MS || 30000);
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'medassist.sqlite');
 const FRONTEND_DIST = process.env.FRONTEND_DIST || path.join(__dirname, '..', 'dist');
 const RESOLVED_FRONTEND_DIST = path.resolve(FRONTEND_DIST);
@@ -1713,6 +1714,10 @@ async function router(req, res) {
       medication.createdAt,
     );
 
+    runEscalationSweep().catch(() => {
+      // Keep API response fast even if sweep provider requests fail.
+    });
+
     sendJson(res, 201, {
       ok: true,
       item: medication,
@@ -1850,6 +1855,9 @@ async function router(req, res) {
 
 initDatabase();
 cleanupExpiredSessions();
+runEscalationSweep().catch(() => {
+  // Keep startup resilient if third-party provider calls fail.
+});
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -1864,7 +1872,7 @@ const sweepTimer = setInterval(() => {
     // keep server alive even if provider API fails
   });
   cleanupExpiredSessions();
-}, 60 * 1000);
+}, SWEEP_INTERVAL_MS);
 
 server.listen(PORT, () => {
   console.log(`MedAssist backend running on http://localhost:${PORT}`);
